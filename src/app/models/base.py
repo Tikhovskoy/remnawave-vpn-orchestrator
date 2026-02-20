@@ -1,4 +1,13 @@
-"""Декларативная база для моделей SQLAlchemy.
+"""Декларативная база для всех ORM-моделей."""
 
-Будет реализовано на Шаге 2 (Слой базы данных).
-"""
+from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
+
+
+class Base(DeclarativeBase):
+    """Базовый класс для всех моделей SQLAlchemy.
+
+    Все ORM-модели должны наследоваться от этого класса,
+    чтобы Alembic мог автоматически обнаруживать таблицы.
+    """
+
+    pass
