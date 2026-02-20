@@ -1,0 +1,5 @@
+:3000 {
+    reverse_proxy remnawave:3000 {
+        header_up X-Forwarded-Proto "https"
+    }
+}

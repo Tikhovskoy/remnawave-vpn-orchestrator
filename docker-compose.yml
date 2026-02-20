@@ -6,6 +6,21 @@ x-logging: &logging
       max-file: "3"
 
 services:
+  # ─── Caddy (reverse proxy для RemnaWave) ────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
+    <<: *logging
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - remnawave-network
+    depends_on:
+      - remnawave
+
   # ─── Панель RemnaWave ──────────────────────────────────
   remnawave:
     image: remnawave/backend:2
@@ -14,8 +29,9 @@ services:
     restart: always
     <<: *logging
     ports:
-      - "127.0.0.1:3000:3000"
       - "127.0.0.1:3001:3001"
+    expose:
+      - "3000"
     env_file:
       - .env.remnawave
     networks:
