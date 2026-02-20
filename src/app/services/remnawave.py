@@ -66,7 +66,7 @@ class RemnawaveService:
         user = await self._sdk.users.create_user(
             CreateUserRequestDto(
                 username=username,
-                status="active",
+                status="ACTIVE",
                 expire_at=expire_at,
             )
         )
