@@ -56,8 +56,8 @@ class ClientConfigUnavailableError(HTTPException):
 class RemnawaveIntegrationError(HTTPException):
     """Ошибка взаимодействия с RemnaWave API."""
 
-    def __init__(self, detail: str) -> None:
+    def __init__(self) -> None:
         super().__init__(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Ошибка RemnaWave: {detail}",
+            detail="Ошибка взаимодействия с VPN-провайдером",
         )
