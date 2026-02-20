@@ -9,6 +9,7 @@
 - **Alembic** — миграции БД
 - **RemnaWave Python SDK** — интеграция с панелью
 - **Docker Compose** — инфраструктура
+- **Caddy** — reverse proxy для RemnaWave
 - **uv** — менеджер зависимостей
 
 ## Архитектура
@@ -37,7 +38,8 @@ docker compose up -d
 ```
 
 Запустятся:
-- **RemnaWave** — `localhost:3000` (панель, Swagger: `localhost:3000/docs`)
+- **Caddy** — reverse proxy (`localhost:3000`), проксирует запросы к RemnaWave
+- **RemnaWave** — панель управления (доступна через Caddy на `localhost:3000`)
 - **PostgreSQL RemnaWave** — `localhost:6767`
 - **Redis (Valkey)** — внутренняя сеть
 - **PostgreSQL оркестратора** — `localhost:5433`
@@ -212,4 +214,6 @@ src/app/
 │   └── operation.py      # DTO операций
 └── exceptions/
     └── handlers.py       # HTTP-исключения
+
+Caddyfile                 # Конфигурация reverse proxy
 ```
