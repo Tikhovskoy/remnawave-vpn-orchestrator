@@ -4,6 +4,7 @@
 Все операции логируются в таблицу operations (аудит).
 """
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -23,6 +24,8 @@ from app.repositories.client import ClientRepository
 from app.repositories.operation import OperationRepository
 from app.services.remnawave import RemnawaveService
 
+logger = logging.getLogger(__name__)
+
 
 class ClientService:
     """Основной сервис управления жизненным циклом VPN-клиентов.
@@ -36,17 +39,20 @@ class ClientService:
 
     Attributes:
         _client_repo: Репозиторий клиентов.
-        _operation_repo: Репозиторий операций (аудит).
+        _operation_repo: Репозиторий операций (аудит, основная сессия).
+        _audit_repo: Репозиторий операций (аудит ошибок, независимая сессия).
         _remnawave: Адаптер RemnaWave SDK.
     """
 
     def __init__(
         self,
         session: AsyncSession,
+        audit_session: AsyncSession,
         remnawave: RemnawaveService,
     ) -> None:
         self._client_repo = ClientRepository(session)
         self._operation_repo = OperationRepository(session)
+        self._audit_repo = OperationRepository(audit_session)
         self._remnawave = remnawave
 
     # ── Создание клиента ─────────────────────────────────
@@ -58,6 +64,9 @@ class ClientService:
         2. Создаёт пользователя в RemnaWave.
         3. Сохраняет клиента в локальную БД.
         4. Пишет аудит-лог.
+
+        При ошибке сохранения в БД выполняется компенсация:
+        удаление созданного пользователя из RemnaWave (saga).
 
         Args:
             username: Уникальное имя пользователя.
@@ -84,9 +93,10 @@ class ClientService:
                 expire_at=expire_at,
             )
         except Exception as exc:
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка создания пользователя в RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
-        # Сохраняем локально
+        # Сохраняем локально (с компенсацией при сбое)
         client = Client(
             username=username,
             remnawave_uuid=rw_user.uuid,
@@ -95,7 +105,20 @@ class ClientService:
             status=ClientStatus.ACTIVE,
             expires_at=expire_at,
         )
-        client = await self._client_repo.create(client)
+        try:
+            client = await self._client_repo.create(client)
+        except Exception as exc:
+            logger.error("Ошибка сохранения клиента в БД: %s", exc)
+            # Компенсация: удаляем «сироту» из RemnaWave
+            try:
+                await self._remnawave.delete_user(rw_user.uuid)
+            except Exception as cleanup_exc:
+                logger.critical(
+                    "Не удалось удалить сироту в RemnaWave (uuid=%s): %s",
+                    rw_user.uuid,
+                    cleanup_exc,
+                )
+            raise RemnawaveIntegrationError() from exc
 
         # Аудит
         await self._operation_repo.create(
@@ -170,14 +193,15 @@ class ClientService:
                 result=OperationResult.SUCCESS,
             )
         except Exception as exc:
-            await self._operation_repo.create(
+            await self._audit_repo.create(
                 client_id=client.id,
                 action=ActionType.DELETE,
                 payload=None,
                 result=OperationResult.FAIL,
                 error=str(exc),
             )
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка удаления пользователя в RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
         await self._client_repo.delete(client)
 
@@ -213,14 +237,15 @@ class ClientService:
                     expire_at=new_expires_at,
                 )
         except Exception as exc:
-            await self._operation_repo.create(
+            await self._audit_repo.create(
                 client_id=client.id,
                 action=ActionType.EXTEND,
                 payload={"days": days},
                 result=OperationResult.FAIL,
                 error=str(exc),
             )
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка продления подписки в RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
         client.expires_at = new_expires_at
         client = await self._client_repo.update(client)
@@ -257,14 +282,15 @@ class ClientService:
             if client.remnawave_uuid:
                 await self._remnawave.disable_user(client.remnawave_uuid)
         except Exception as exc:
-            await self._operation_repo.create(
+            await self._audit_repo.create(
                 client_id=client.id,
                 action=ActionType.BLOCK,
                 payload=None,
                 result=OperationResult.FAIL,
                 error=str(exc),
             )
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка блокировки пользователя в RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
         client.status = ClientStatus.BLOCKED
         client = await self._client_repo.update(client)
@@ -299,14 +325,15 @@ class ClientService:
             if client.remnawave_uuid:
                 await self._remnawave.enable_user(client.remnawave_uuid)
         except Exception as exc:
-            await self._operation_repo.create(
+            await self._audit_repo.create(
                 client_id=client.id,
                 action=ActionType.UNBLOCK,
                 payload=None,
                 result=OperationResult.FAIL,
                 error=str(exc),
             )
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка разблокировки пользователя в RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
         client.status = ClientStatus.ACTIVE
         client = await self._client_repo.update(client)
@@ -347,14 +374,15 @@ class ClientService:
                 short_uuid=client.short_uuid,
             )
         except Exception as exc:
-            await self._operation_repo.create(
+            await self._audit_repo.create(
                 client_id=client.id,
                 action=ActionType.GET_CONFIG,
                 payload=None,
                 result=OperationResult.FAIL,
                 error=str(exc),
             )
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка получения конфигурации из RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
         await self._operation_repo.create(
             client_id=client.id,
@@ -395,14 +423,15 @@ class ClientService:
                 remnawave_uuid=client.remnawave_uuid,
             )
         except Exception as exc:
-            await self._operation_repo.create(
+            await self._audit_repo.create(
                 client_id=client.id,
                 action=ActionType.ROTATE_CONFIG,
                 payload=None,
                 result=OperationResult.FAIL,
                 error=str(exc),
             )
-            raise RemnawaveIntegrationError(str(exc)) from exc
+            logger.error("Ошибка ротации конфигурации в RemnaWave: %s", exc)
+            raise RemnawaveIntegrationError() from exc
 
         client.short_uuid = rw_user.short_uuid
         client.subscription_url = rw_user.subscription_url
@@ -449,12 +478,15 @@ class ClientService:
                 )
                 count += 1
             except Exception as exc:
-                await self._operation_repo.create(
+                await self._audit_repo.create(
                     client_id=client.id,
                     action=ActionType.AUTO_DEACTIVATE,
                     payload={"expired_at": client.expires_at.isoformat()},
                     result=OperationResult.FAIL,
                     error=str(exc),
+                )
+                logger.error(
+                    "Ошибка деактивации клиента %s: %s", client.id, exc,
                 )
 
         return count

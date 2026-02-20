@@ -56,9 +56,14 @@ def _make_service(
 ) -> ClientService:
     """Создать ClientService с замоканными зависимостями."""
     session_mock = AsyncMock()
+    audit_session_mock = AsyncMock()
     remnawave = remnawave_mock or AsyncMock(spec=RemnawaveService)
 
-    service = ClientService(session=session_mock, remnawave=remnawave)
+    service = ClientService(
+        session=session_mock,
+        audit_session=audit_session_mock,
+        remnawave=remnawave,
+    )
 
     # Подменяем репозитории моками
     if client_repo_mock:
@@ -70,6 +75,8 @@ def _make_service(
         service._operation_repo = operation_repo_mock
     else:
         service._operation_repo = AsyncMock()
+
+    service._audit_repo = AsyncMock()
 
     return service
 

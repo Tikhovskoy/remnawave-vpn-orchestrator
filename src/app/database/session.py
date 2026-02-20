@@ -36,3 +36,18 @@ async def get_session() -> AsyncSession:  # type: ignore[misc]
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_audit_session() -> AsyncSession:  # type: ignore[misc]
+    """Независимая сессия для записи аудит-логов ошибок.
+
+    Коммитится отдельно от основной транзакции, поэтому
+    FAIL-записи сохраняются даже при rollback основной сессии.
+    """
+    async with async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

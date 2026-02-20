@@ -10,7 +10,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
-from app.database.session import get_session
+from app.database.session import get_audit_session, get_session
 from app.services.client import ClientService
 from app.services.remnawave import RemnawaveService
 
@@ -33,6 +33,7 @@ def get_remnawave_service() -> RemnawaveService:
 
 def get_client_service(
     session: AsyncSession = Depends(get_session),
+    audit_session: AsyncSession = Depends(get_audit_session),
     remnawave: RemnawaveService = Depends(get_remnawave_service),
 ) -> ClientService:
     """Провайдер сервиса бизнес-логики клиентов.
@@ -41,9 +42,14 @@ def get_client_service(
 
     Args:
         session: Асинхронная сессия SQLAlchemy.
+        audit_session: Независимая сессия для аудит-логов ошибок.
         remnawave: Сервис RemnaWave.
 
     Returns:
         Экземпляр ClientService.
     """
-    return ClientService(session=session, remnawave=remnawave)
+    return ClientService(
+        session=session,
+        audit_session=audit_session,
+        remnawave=remnawave,
+    )
