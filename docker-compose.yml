@@ -1,0 +1,107 @@
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 50m
+      max-file: "3"
+
+services:
+  # ─── Панель RemnaWave ──────────────────────────────────
+  remnawave:
+    image: remnawave/backend:2
+    container_name: remnawave
+    hostname: remnawave
+    restart: always
+    <<: *logging
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - .env.remnawave
+    networks:
+      - remnawave-network
+    depends_on:
+      remnawave-db:
+        condition: service_healthy
+      remnawave-redis:
+        condition: service_healthy
+
+  # ─── PostgreSQL RemnaWave ──────────────────────────────
+  remnawave-db:
+    image: postgres:17
+    container_name: remnawave-db
+    hostname: remnawave-db
+    restart: always
+    <<: *logging
+    environment:
+      POSTGRES_USER: ${RW_POSTGRES_USER:-remnawave}
+      POSTGRES_PASSWORD: ${RW_POSTGRES_PASSWORD:-remnawave}
+      POSTGRES_DB: ${RW_POSTGRES_DB:-remnawave}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:6767:5432"
+    volumes:
+      - remnawave-db-data:/var/lib/postgresql/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 10s
+      retries: 3
+
+  # ─── Redis RemnaWave (Valkey) ──────────────────────────
+  remnawave-redis:
+    image: valkey/valkey:8.1-alpine
+    container_name: remnawave-redis
+    hostname: remnawave-redis
+    restart: always
+    <<: *logging
+    command: >
+      valkey-server
+      --save ""
+      --appendonly no
+      --maxmemory-policy noeviction
+      --loglevel warning
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 3
+
+  # ─── PostgreSQL оркестратора ───────────────────────────
+  orchestrator-db:
+    image: postgres:17
+    container_name: orchestrator-db
+    hostname: orchestrator-db
+    restart: always
+    <<: *logging
+    environment:
+      POSTGRES_USER: ${ORCH_POSTGRES_USER:-orchestrator}
+      POSTGRES_PASSWORD: ${ORCH_POSTGRES_PASSWORD:-orchestrator}
+      POSTGRES_DB: ${ORCH_POSTGRES_DB:-orchestrator}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - orchestrator-db-data:/var/lib/postgresql/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 10s
+      retries: 3
+
+networks:
+  remnawave-network:
+    name: remnawave-network
+    driver: bridge
+
+volumes:
+  remnawave-db-data:
+    driver: local
+  orchestrator-db-data:
+    driver: local

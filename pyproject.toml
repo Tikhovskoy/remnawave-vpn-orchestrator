@@ -1,0 +1,22 @@
+[project]
+name = "test-work"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.129.0",
+    "httpx>=0.27.2",
+    "orjson>=3.11.7",
+    "pydantic-settings>=2.13.1",
+    "remnawave>=2.4.4",
+    "sqlalchemy[asyncio]>=2.0.46",
+    "uvicorn[standard]>=0.41.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
