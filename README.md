@@ -31,15 +31,13 @@ git clone <repo-url>
 cd remnawave-orchestrator
 ```
 
-### 2. Настроить окружение
+### 2. Подготовить конфигурацию
 
 ```bash
 cp .env.example .env
 ```
 
-Отредактировать `.env` — вписать `REMNAWAVE_API_TOKEN` (создать в панели RemnaWave → API Tokens после первого запуска).
-
-### 3. Запустить одной командой
+### 3. Запустить все сервисы
 
 ```bash
 docker compose up -d --build
@@ -54,6 +52,18 @@ docker compose up -d --build
 - **PostgreSQL оркестратора** — `localhost:5433`
 
 Миграции БД применяются автоматически при старте контейнера оркестратора.
+
+### 4. Настроить API-токен
+
+1. Открыть панель RemnaWave: `http://localhost:3000`
+2. Создать учётную запись администратора
+3. Перейти в раздел **API Tokens** и выпустить новый токен
+4. Вписать полученный токен в `.env` → `REMNAWAVE_API_TOKEN`
+5. Перезапустить оркестратор:
+
+```bash
+docker compose up -d --force-recreate orchestrator
+```
 
 ### Локальная разработка (без Docker для оркестратора)
 
