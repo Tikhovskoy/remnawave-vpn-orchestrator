@@ -31,46 +31,38 @@ git clone <repo-url>
 cd remnawave-orchestrator
 ```
 
-### 2. Поднять инфраструктуру
+### 2. Настроить окружение
 
 ```bash
-docker compose up -d
+cp .env.example .env
+```
+
+Отредактировать `.env` — вписать `REMNAWAVE_API_TOKEN` (создать в панели RemnaWave → API Tokens после первого запуска).
+
+### 3. Запустить одной командой
+
+```bash
+docker compose up -d --build
 ```
 
 Запустятся:
+- **Оркестратор** — `localhost:8000` (API, Swagger: `localhost:8000/docs`)
 - **Caddy** — reverse proxy (`localhost:3000`), проксирует запросы к RemnaWave
 - **RemnaWave** — панель управления (доступна через Caddy на `localhost:3000`)
 - **PostgreSQL RemnaWave** — `localhost:6767`
 - **Redis (Valkey)** — внутренняя сеть
 - **PostgreSQL оркестратора** — `localhost:5433`
 
-### 3. Сгенерировать API-токен и настроить окружение
+Миграции БД применяются автоматически при старте контейнера оркестратора.
 
-Открыть панель RemnaWave (`http://localhost:3000`), перейти в раздел API Tokens и создать новый токен.
-
-```bash
-cp .env.example .env
-```
-
-Отредактировать `.env` — вписать полученный `REMNAWAVE_API_TOKEN` и при необходимости скорректировать остальные параметры.
-
-### 4. Создать venv и установить зависимости
+### Локальная разработка (без Docker для оркестратора)
 
 ```powershell
+docker compose up -d orchestrator-db remnawave-db remnawave-redis remnawave caddy
 uv venv
 .\.venv\Scripts\activate
 uv sync
-```
-
-### 5. Применить миграции
-
-```bash
 alembic upgrade head
-```
-
-### 6. Запустить сервис
-
-```bash
 uvicorn app.main:app --reload --app-dir src
 ```
 

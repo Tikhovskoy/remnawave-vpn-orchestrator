@@ -111,6 +111,32 @@ services:
       timeout: 10s
       retries: 3
 
+  # ─── Оркестратор (API) ─────────────────────────────────
+  orchestrator:
+    build: .
+    container_name: orchestrator
+    hostname: orchestrator
+    restart: always
+    <<: *logging
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+      APP_DEBUG: "false"
+      DATABASE_URL: "postgresql+asyncpg://${ORCH_POSTGRES_USER:-orchestrator}:${ORCH_POSTGRES_PASSWORD:-orchestrator}@orchestrator-db:5432/${ORCH_POSTGRES_DB:-orchestrator}"
+      REMNAWAVE_BASE_URL: "http://remnawave:3000"
+      REMNAWAVE_API_TOKEN: "${REMNAWAVE_API_TOKEN:-change_me}"
+    entrypoint: ["sh", "-c", "python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    working_dir: /app
+    networks:
+      - remnawave-network
+    depends_on:
+      orchestrator-db:
+        condition: service_healthy
+      remnawave:
+        condition: service_started
+
 networks:
   remnawave-network:
     name: remnawave-network
